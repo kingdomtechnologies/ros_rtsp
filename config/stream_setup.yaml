@@ -2,16 +2,23 @@
 port: "8554"
 streams: # Cannot rename - must leave this as is.
 
-  stream-x:
-    type: cam
-    source: "v4l2src device=/dev/video0 ! videoconvert ! videoscale ! video/x-raw,framerate=15/1,width=1280,height=720"
-    mountpoint: /front
-    bitrate: 500
+#  stream-x:
+#    type: cam
+#    source: "v4l2src device=/dev/video0 ! videoconvert ! videoscale ! video/x-raw,framerate=15/1,width=1280,height=720"
+#    mountpoint: /back
+#    bitrate: 500
 
-  stream-yay:
+  stream-front:
     type: topic
-    source: /usb_cam1/image_raw
-    mountpoint: /back
+    source: /sensors/front_camera/image/raw
+    mountpoint: /front
     caps: video/x-raw,framerate=10/1,width=640,height=480
-    bitrate: 500
+    bitrate: 150
+
+  stream-rs:
+    type: topic
+    source: /camera/color/image_raw
+    mountpoint: /rs
+    caps: video/x-raw,framerate=10/1,width=640,height=480
+    bitrate: 150
 
