@@ -13,12 +13,13 @@ streams: # Cannot rename - must leave this as is.
     source: /sensors/front_camera/image/raw
     mountpoint: /front
     caps: video/x-raw,framerate=10/1,width=640,height=480
-    bitrate: 150
+    bitrate: 100
 
   stream-rs:
     type: topic
     source: /camera/color/image_raw
-    mountpoint: /rs
+#    source: /camera/color/image_raw/compressed
+#    source: /camera/depth/image_rect_raw
+    mountpoint: /realsense
     caps: video/x-raw,framerate=10/1,width=640,height=480
     bitrate: 150
-
