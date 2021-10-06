@@ -2,11 +2,25 @@
 port: "8554"
 streams: # Cannot rename - must leave this as is.
 
-#  stream-x:
+  stream-elp-usb:
+    type: topic
+#    source: /cv_camera/image_raw
+    source: /usb_cam/image_raw
 #    type: cam
-#    source: "v4l2src device=/dev/video0 ! videoconvert ! videoscale ! video/x-raw,framerate=15/1,width=1280,height=720"
-#    mountpoint: /back
-#    bitrate: 500
+#    source: "v4l2src device=/dev/video1 ! videoconvert ! videoscale ! video/x-raw,framerate=15/1,width=1280,height=720"
+    mountpoint: /elp_usb
+    caps: video/x-raw,framerate=10/1,width=640,height=480
+    bitrate: 150
+
+  stream-elp-cv:
+    type: topic
+    source: /cv_camera/image_raw
+#    source: /usb_cam/image_raw
+#    type: cam
+#    source: "v4l2src device=/dev/video1 ! videoconvert ! videoscale ! video/x-raw,framerate=15/1,width=1280,height=720"
+    mountpoint: /elp_cv
+    caps: video/x-raw,framerate=10/1,width=640,height=480
+    bitrate: 150
 
   stream-front:
     type: topic
