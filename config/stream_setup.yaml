@@ -24,7 +24,7 @@ streams: # Cannot rename - must leave this as is.
 
   stream-front:
     type: topic
-    source: /sensors/front_camera/image/raw
+    source: /sensors/front_camera/image_raw
     mountpoint: /front
     caps: video/x-raw,framerate=10/1,width=640,height=480
     bitrate: 150
