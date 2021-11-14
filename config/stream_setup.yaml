@@ -29,6 +29,13 @@ streams: # Cannot rename - must leave this as is.
     caps: video/x-raw,framerate=10/1,width=640,height=480
     bitrate: 150
 
+  stream-front-raw:
+    type: topic
+    source: /sensors/front_camera/image_raw
+    mountpoint: /front-raw
+    caps: video/x-raw,framerate=10/1,width=640,height=480
+    bitrate: 150
+
   stream-rs:
     type: topic
     source: /camera/color/image_raw
