@@ -1,33 +1,24 @@
 # Set up your streams to rtsp here.
 port: "8554"
 streams: # Cannot rename - must leave this as is.
+    stream-rs:
+      type: topic
+      source: /kingdom_image_repeater/image_out
+      #source: /camera/color/image_raw
+      mountpoint: /rs-raw
+      caps: video/x-raw,framerate=10/1,width=640,height=480
+      bitrate: 150
+  
+    stream-left:
+      type: topic
+      source: /sensors/left_camera/image_raw
+      mountpoint: /left-raw
+      caps: video/x-raw,framerate=10/1,width=640,height=480
+      bitrate: 150
 
-  stream-front:
-    type: topic
-    source: /sensors/front_camera/image_rect_color
-    mountpoint: /front
-    caps: video/x-raw,framerate=10/1,width=640,height=480
-    bitrate: 150
-
-  stream-left:
-    type: topic
-    source: /sensors/left_camera/image_rect_color
-    mountpoint: /left
-    caps: video/x-raw,framerate=10/1,width=640,height=480
-    bitrate: 150
-
-  stream-right:
-    type: topic
-    source: /sensors/right_camera/image_rect_color
-    mountpoint: /right
-    caps: video/x-raw,framerate=10/1,width=640,height=480
-    bitrate: 150
-
-  stream-rs:
-    type: topic
-    source: /camera/color/image_raw
-#    source: /camera/color/image_raw/compressed
-#    source: /camera/depth/image_rect_raw
-    mountpoint: /rs-raw
-    caps: video/x-raw,framerate=10/1,width=640,height=480
-    bitrate: 150
+    stream-right:
+      type: topic
+      source: /sensors/right_camera/image_raw
+      mountpoint: /right-raw
+      caps: video/x-raw,framerate=10/1,width=640,height=480
+      bitrate: 150
