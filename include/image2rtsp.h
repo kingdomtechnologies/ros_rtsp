@@ -12,7 +12,8 @@ namespace image2rtsp {
             void print_error(char *s);
 
         private:
-      std::string port;
+            std::string port;
+            ros::Publisher client_bool_pub;
             std::map<std::string, ros::Subscriber> subs;
             std::map<std::string, GstAppSrc*> appsrc;
             std::map<std::string, int> num_of_clients;

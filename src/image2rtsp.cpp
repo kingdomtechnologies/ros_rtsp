@@ -6,6 +6,7 @@
 #include <gst/app/gstappsrc.h>
 #include <gst/rtsp-server/rtsp-server.h>
 #include <ros/ros.h>
+#include "std_msgs/Bool.h"
 #include "sensor_msgs/Image.h"
 #include <sensor_msgs/image_encodings.h>
 #include <image2rtsp.h>
@@ -35,8 +36,10 @@ void Image2RTSPNodelet::onInit() {
     ROS_DEBUG("Number of RTSP streams: %d", streams.size());
     nh.getParam("port", this->port);
 
+    client_bool_pub = nh.advertise<std_msgs::Bool>("/autonomy/passive_monitoring", 10, true);
+
     video_mainloop_start();
-  rtsp_server = rtsp_server_create(port);
+    rtsp_server = rtsp_server_create(port);
 
     // Go through and parse each stream
     for(XmlRpc::XmlRpcValue::ValueStruct::const_iterator it = streams.begin(); it != streams.end(); ++it)
@@ -141,6 +144,11 @@ void Image2RTSPNodelet::url_connected(string url) {
     NODELET_INFO("Client connected: %s", url.c_str());
     ros::NodeHandle& nh = getPrivateNodeHandle();
 
+    // publishing a bool topic for AWS
+    std_msgs::Bool msg;
+    msg.data = true;
+    client_bool_pub.publish(msg);
+
     // Get the parameters from the rosparam server
     XmlRpc::XmlRpcValue streams;
     nh.getParam("streams", streams);
@@ -171,6 +179,11 @@ void Image2RTSPNodelet::url_disconnected(string url) {
 
     NODELET_INFO("Client disconnected: %s", url.c_str());
     ros::NodeHandle& nh = getPrivateNodeHandle();
+
+    // publishing a bool topic for AWS
+    std_msgs::Bool msg;
+    msg.data = false;
+    client_bool_pub.publish(msg);
 
     // Get the parameters from the rosparam server
     XmlRpc::XmlRpcValue streams;
