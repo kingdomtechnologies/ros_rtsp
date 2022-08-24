@@ -204,6 +204,12 @@ void Image2RTSPNodelet::url_disconnected(string url)
         XmlRpc::XmlRpcValue stream = streams[it->first];
         mountpoint = static_cast<std::string>(stream["mountpoint"]);
 
+        if (num_of_clients[url] > 0)
+        {
+            is_all_empty_prev = is_all_empty;
+            is_all_empty = false;
+        }
+
         // Check which stream the client has disconnected from
         if (url == mountpoint)
         {
@@ -217,11 +223,6 @@ void Image2RTSPNodelet::url_disconnected(string url)
                 // No-one else is connected. Stop the subscription.
                 subs[url].shutdown();
                 appsrc[url] = NULL;
-            }
-            else // means that the clinets are more than 1
-            {
-                is_all_empty_prev = is_all_empty;
-                is_all_empty = false;
             }
         }
     }
