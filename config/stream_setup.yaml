@@ -3,8 +3,8 @@ port: "8554"
 streams: # Cannot rename - must leave this as is.
     stream-rs:
       type: topic
-      #source: /kingdom_image_repeater/image_out
-      source: /camera/color/image_raw
+      source: /kingdom_image_repeater/image_out
+      #source: /camera/color/image_raw
       mountpoint: /rs-raw
       caps: video/x-raw,framerate=10/1,width=640,height=480
       bitrate: 150
