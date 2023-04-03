@@ -1,3 +1,4 @@
+#include <chrono>
 #include <string>
 #include <stdio.h>
 #include <nodelet/nodelet.h>
@@ -13,6 +14,68 @@
 
 using namespace std;
 using namespace image2rtsp;
+
+
+
+
+
+
+// TODO: make a watchdog for subscribed topics incase they die in the middle of a stream to unregister the client, close the stream (if that's the last client),
+// and lower the passive monitoring flag
+
+//TODO: handle when there are issues with image subcription that causes client stream to close on their end, but the flag is still raised and the ros sub is still up
+
+
+
+void Image2RTSPNodelet::timerCallback(const ros::TimerEvent&)
+{
+    // Check each timer in the map
+    for (auto& kv : watchdog_timers)
+    {
+        if(num_of_clients[kv.first]<1) // no clients here
+            continue;
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - kv.second).count();
+
+        if (elapsed > TIMEOUT_THRESHOLD)
+        {
+            NODELET_ERROR( "Watchdog timer '%s' has timed out!",kv.first.c_str() );
+            num_of_clients[kv.first] = 0;
+            NODELET_INFO("Shutting down the topic for %s", kv.first.c_str());
+            //Stop the subscription because the topic is dead.
+            subs[kv.first].shutdown();
+            appsrc[kv.first] = NULL;        
+        }
+    }
+
+    std::string mountpoint;
+    is_all_empty = true; // it's all empty until at least one stream proves it wrong 
+    // Go through and parse each stream
+    for (XmlRpc::XmlRpcValue::ValueStruct::const_iterator it = streams.begin(); it != streams.end(); ++it)
+    {
+        XmlRpc::XmlRpcValue stream = streams[it->first];
+        mountpoint = static_cast<std::string>(stream["mountpoint"]);
+        if (num_of_clients[mountpoint] > 0)
+        {
+            is_all_empty = false;
+            break;
+        }
+    }
+
+    if (is_all_empty)
+    {
+        // publishing a bool topic for AWS
+        if (monitoring_state)
+        {       
+            NODELET_INFO("All streams have no subscribers Changing motnitoring flag to false");
+            monitoring_state = false;
+            std_msgs::Bool msg;
+            msg.data = false;
+            client_bool_pub.publish(msg);
+        }
+    }
+        
+}        
 
 void Image2RTSPNodelet::onInit()
 {
@@ -30,13 +93,16 @@ void Image2RTSPNodelet::onInit()
     ros::NodeHandle &nh = getPrivateNodeHandle();
 
     // Get the parameters from the rosparam server
-    XmlRpc::XmlRpcValue streams;
-    nh.getParam("streams", streams);
+    nh.getParam("streams", this->streams);
     ROS_ASSERT(streams.getType() == XmlRpc::XmlRpcValue::TypeStruct);
     ROS_DEBUG("Number of RTSP streams: %d", streams.size());
     nh.getParam("port", this->port);
 
     client_bool_pub = nh.advertise<std_msgs::Bool>("/autonomy/passive_monitoring", 10, true);
+
+    std_msgs::Bool msg;
+    msg.data = false;
+    client_bool_pub.publish(msg);
 
     video_mainloop_start();
     rtsp_server = rtsp_server_create(port);
@@ -79,6 +145,12 @@ void Image2RTSPNodelet::onInit()
         }
         NODELET_INFO("Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), mountpoint.c_str());
     }
+
+    timer = getNodeHandle().createTimer(ros::Duration(1.0), &Image2RTSPNodelet::timerCallback, this);
+
+
+    printStreamsClients();
+
 }
 
 /* Modified from https://github.com/ProjectArtemis/gst_video_server/blob/master/src/server_nodelet.cpp */
@@ -107,7 +179,7 @@ GstCaps *Image2RTSPNodelet::gst_caps_new_from_image(const sensor_msgs::Image::Co
     auto format = known_formats.find(msg->encoding);
     if (format == known_formats.end())
     {
-        ROS_ERROR("GST: image format '%s' unknown", msg->encoding.c_str());
+        ROS_ERROR_THROTTLE(5,"GST: image format '%s' unknown", msg->encoding.c_str());
         return nullptr;
     }
 
@@ -124,6 +196,7 @@ void Image2RTSPNodelet::imageCallback(const sensor_msgs::Image::ConstPtr &msg, c
     GstBuffer *buf;
     GstCaps *caps;
     char *gst_type, *gst_format = (char *)"";
+
     if (!monitoring_state)
     {
         monitoring_state = true;
@@ -133,6 +206,9 @@ void Image2RTSPNodelet::imageCallback(const sensor_msgs::Image::ConstPtr &msg, c
         msg.data = true;
         client_bool_pub.publish(msg);
     }
+
+    watchdog_timers[topic] = std::chrono::steady_clock::now(); //resetting the watchdog timer for this topic
+
     // g_print("Image encoding: %s\n", msg->encoding.c_str());
     if (appsrc[topic] != NULL)
     {
@@ -155,11 +231,6 @@ void Image2RTSPNodelet::url_connected(string url)
     NODELET_INFO("Client connected: %s", url.c_str());
     ros::NodeHandle &nh = getPrivateNodeHandle();
 
-    // Get the parameters from the rosparam server
-    XmlRpc::XmlRpcValue streams;
-    nh.getParam("streams", streams);
-    ROS_ASSERT(streams.getType() == XmlRpc::XmlRpcValue::TypeStruct);
-
     // Go through and parse each stream
     for (XmlRpc::XmlRpcValue::ValueStruct::const_iterator it = streams.begin(); it != streams.end(); ++it)
     {
@@ -175,13 +246,31 @@ void Image2RTSPNodelet::url_connected(string url)
             if (num_of_clients[url] == 0)
             {
                 // Subscribe to the ROS topic
+                NODELET_INFO("First connection for stream %s",url.c_str());
+                watchdog_timers[url] = std::chrono::steady_clock::now();
+
                 subs[url] = nh.subscribe<sensor_msgs::Image>(source, 1, boost::bind(&Image2RTSPNodelet::imageCallback, this, _1, url));
             }
             num_of_clients[url]++;
-            is_all_empty_prev = is_all_empty;
             is_all_empty = false;
         }
     }
+
+    printStreamsClients();
+}
+
+
+void Image2RTSPNodelet::printStreamsClients()
+{
+    std::string mountpoint;
+    NODELET_INFO("Current clients for all streams:");
+    for (XmlRpc::XmlRpcValue::ValueStruct::const_iterator it = streams.begin(); it != streams.end(); ++it)
+    {
+        XmlRpc::XmlRpcValue stream = streams[it->first];
+        mountpoint = static_cast<std::string>(stream["mountpoint"]);        
+        NODELET_INFO("%s: %i", mountpoint.c_str(), num_of_clients[mountpoint]);
+    }
+
 }
 
 void Image2RTSPNodelet::url_disconnected(string url)
@@ -191,19 +280,15 @@ void Image2RTSPNodelet::url_disconnected(string url)
     NODELET_INFO("Client disconnected: %s", url.c_str());
     ros::NodeHandle &nh = getPrivateNodeHandle();
 
-    // Get the parameters from the rosparam server
-    XmlRpc::XmlRpcValue streams;
-    nh.getParam("streams", streams);
-    ROS_ASSERT(streams.getType() == XmlRpc::XmlRpcValue::TypeStruct);
+    printStreamsClients();
 
-    is_all_empty_prev = is_all_empty;
-    is_all_empty = true;
+    is_all_empty = true; // it's all empty until at least one stream proves it wrong 
     // Go through and parse each stream
     for (XmlRpc::XmlRpcValue::ValueStruct::const_iterator it = streams.begin(); it != streams.end(); ++it)
     {
         XmlRpc::XmlRpcValue stream = streams[it->first];
         mountpoint = static_cast<std::string>(stream["mountpoint"]);
-
+        
         // Check which stream the client has disconnected from
         if (url == mountpoint)
         {
@@ -219,23 +304,12 @@ void Image2RTSPNodelet::url_disconnected(string url)
                 appsrc[url] = NULL;
             }
         }
-        if (num_of_clients[url] > 0)
-        {
-            is_all_empty_prev = is_all_empty;
+        if (num_of_clients[mountpoint] > 0)
             is_all_empty = false;
-        }
-    }
-    if (is_all_empty and !is_all_empty_prev)
-    {
-        // publishing a bool topic for AWS
-        NODELET_INFO("All streams have no subscribers Changing motnitoring flag to false");
-        if (!monitoring_state)
-            NODELET_WARN("monitoring flag wasn't raised and it's being set to false again");
-        std_msgs::Bool msg;
-        msg.data = false;
-        client_bool_pub.publish(msg);
     }
 }
+
+
 
 void Image2RTSPNodelet::print_info(char *s)
 {
